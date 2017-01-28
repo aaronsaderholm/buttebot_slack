@@ -69,18 +69,11 @@ def autobutt(message, text):
 
     channel = message.channel
     print(channel.__dict__)
-
-
-
-
     #if chan[0] == '#': # public channel
     if True:
         if chan in channel_states:
             state = channel_states[chan]
             state.lines_left -= 1
-
-
-
             sent, score = butter.score_sentence(text)
 
             text = butter.buttify_sentence(sent, score)
@@ -92,13 +85,7 @@ def autobutt(message, text):
             if score.sentence() == 0 or score.sentence() < state.lines_left:
                 return
 
-            print("Hello???")
-
-
-
         channel_states[chan] = ChannelState(
             random.normalvariate(rate_mean, rate_sigma) + now,
             poissonvariate(lines_mean)
         )
-
-        print(channel_states.__dict__)
