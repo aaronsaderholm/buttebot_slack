@@ -1,10 +1,10 @@
 from slackbot.bot import listen_to
 import re
 from butter import butter
-import itertools
-import math
-import random
-import time
+import time, json, random, math, itertools
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def poissonvariate(lambd):
@@ -48,44 +48,84 @@ def debutt(msg, me=None):
                 score.word(i), score.syllable(i))
     return result
 
+
 class ChannelState(object):
-    def __init__(self, next_time = 0, lines_left = 0):
+    def __init__(self, next_time=0, lines_left=0):
         self.next_time = next_time
         self.lines_left = lines_left
+
+    def __dict__(self):
+        return {
+            'next_time': self.next_time,
+            'line_left': self.lines_left
+        }
+
+    def __str__(self):
+        return "next time %s line left %s" % (self.next_time, self.lines_left)
+
 
 channel_states = {}
 
 # TODO: don't fire this when someone ran .butt!
 
+def butt_logger(message_id, text):
+    text = "%s:TypeError: not enough arguments for format string %s" % (message_id, text)
+    text.replace('\n', '')
+    logger.info(text)
+
+def username_lookup(message):
+    message_data = message.__dict__
+    client = message_data['_client']
+    user_id = message_data['_body']['user']
+    users = client.__dict__['users']
+    return users[user_id]['name']
 
 @listen_to('(.*)')
 def autobutt(message, text):
-    rate_mean  = 300
+    rate_mean  = 20
     rate_sigma = 60
     lines_mean = 20
     now = time.time()
+    #timestamp = "%s %s time.strftime("%x") + time.strftime("%X")
 
-    chan = str("#")
+    channel_data = message.channel.__dict__
+    channel = channel_data['_body']['name']
+    message_id = channel_data['_body']['id']
 
-    channel = message.channel
-    print(channel.__dict__)
-    #if chan[0] == '#': # public channel
+    user_name = username_lookup(message)
+    butt_logger(message_id, "%s: %s" % (user_name, text))
+
     if True:
-        if chan in channel_states:
-            state = channel_states[chan]
+        if channel in channel_states:
+            state = channel_states[channel]
             state.lines_left -= 1
+
             sent, score = butter.score_sentence(text)
 
+            if state.next_time > now:
+                time_left = state.next_time - now
+                butt_logger(message_id, "waiting(%s left)" % int(time_left))
+                return
+
+            score_sentence = score.sentence()
+
+            if score_sentence <= 1:
+                butt_logger(message_id, "sentence score was too low: %s" % score_sentence)
+                return
+
+            if score_sentence < state.lines_left:
+                butt_logger(message_id, "lower score than line count %s / %s" % (score_sentence, state.lines_left))
+                return
+
             text = butter.buttify_sentence(sent, score)
+            butt_logger(message_id, "butt_text: %s" % text)
             message.send(text)
 
-            if state.next_time > now:
-                return
+        else:
+            butt_logger(message_id, "channel %s not in channel_states." % channel)
 
-            if score.sentence() == 0 or score.sentence() < state.lines_left:
-                return
-
-        channel_states[chan] = ChannelState(
+        channel_states[channel] = ChannelState(
             random.normalvariate(rate_mean, rate_sigma) + now,
             poissonvariate(lines_mean)
         )
+
