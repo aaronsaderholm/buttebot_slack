@@ -7,7 +7,7 @@ with open(settings_json) as data_file:
 
 API_TOKEN = data['API_TOKEN']
 
-#DEFAULT_REPLY = data['DEFAULT_REPLY']
+DEFAULT_REPLY = "butt"
 
 
 

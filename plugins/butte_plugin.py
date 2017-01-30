@@ -69,7 +69,7 @@ channel_states = {}
 # TODO: don't fire this when someone ran .butt!
 
 def butt_logger(message_id, text):
-    text = "%s:TypeError: not enough arguments for format string %s" % (message_id, text)
+    text = "%s: %s" % (message_id, text)
     text.replace('\n', '')
     logger.info(text)
 
@@ -79,6 +79,7 @@ def username_lookup(message):
     user_id = message_data['_body']['user']
     users = client.__dict__['users']
     return users[user_id]['name']
+
 
 @listen_to('(.*)')
 def autobutt(message, text):
