@@ -3,9 +3,11 @@ import re
 from butter import butter
 import time, json, random, math, itertools
 import logging
+import slackbot_settings
 
 logger = logging.getLogger(__name__)
 
+s_client = None
 
 def poissonvariate(lambd):
     x = random.random()
@@ -68,32 +70,67 @@ channel_states = {}
 
 # TODO: don't fire this when someone ran .butt!
 
+
 def butt_logger(message_id, text):
+    global s_client
     text = "%s: %s" % (message_id, text)
     text.replace('\n', '')
     logger.info(text)
+    butt_calibration(text)
+
+
+def butt_calibration(send_text):
+    global s_client
+    reply = u'{}\n'.format(send_text)
+    errors_to = s_client.find_channel_by_name(slackbot_settings.ERRORS_TO)
+    s_client.rtm_send_message(errors_to, reply)
+
 
 def username_lookup(message):
-    message_data = message.__dict__
-    client = message_data['_client']
+    client = get_client_dict(message)
+    message_data = get_message_dict(message)
+
     user_id = message_data['_body']['user']
-    users = client.__dict__['users']
+    users = client['users']
     return users[user_id]['name']
+
+
+def get_message_dict(message, clean=False):
+    message_data = message.__dict__
+    return message_data
+
+
+def get_channel_dict(message):
+    return message.channel.__dict__
+
+
+def get_client_dict(message):
+    message_data = get_message_dict(message)
+    client = message_data['_client']
+    return client.__dict__
 
 
 @listen_to('(.*)')
 def autobutt(message, text):
-    rate_mean  = 20
+    channel_data = get_channel_dict(message)
+    channel = channel_data['_body']['name']
+    message_id = channel_data['_body']['id']
+    message_data = get_message_dict(message)
+    global s_client
+    s_client = message_data['_client']
+
+    rate_mean = 20
     rate_sigma = 60
     lines_mean = 20
     now = time.time()
-    #timestamp = "%s %s time.strftime("%x") + time.strftime("%X")
 
-    channel_data = message.channel.__dict__
-    channel = channel_data['_body']['name']
-    message_id = channel_data['_body']['id']
+    if message_data['_body']['user'] is None:
+        return None
 
     user_name = username_lookup(message)
+    if user_name is None:
+        return False
+
     butt_logger(message_id, "%s: %s" % (user_name, text))
 
     if True:
@@ -105,7 +142,7 @@ def autobutt(message, text):
 
             if state.next_time > now:
                 time_left = state.next_time - now
-                butt_logger(message_id, "waiting(%s left)" % int(time_left))
+                butt_logger(message_id, "waiting (%s seconds left)" % int(time_left))
                 return
 
             score_sentence = score.sentence()
@@ -123,7 +160,7 @@ def autobutt(message, text):
             message.send(text)
 
         else:
-            butt_logger(message_id, "channel %s not in channel_states." % channel)
+            butt_logger(message_id, "Adding channel %s to channel_states" % channel)
 
         channel_states[channel] = ChannelState(
             random.normalvariate(rate_mean, rate_sigma) + now,
